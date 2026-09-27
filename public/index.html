@@ -56,16 +56,14 @@
   #buttons { display: flex; gap: 8px; }
   #test-state-panel { display: flex; gap: 8px; }
   #test-state-panel[hidden] { display: none; }
-  /* Small pixel-art icon button, overlaid on the stage corner rather than
-     sitting in the button row -- flat rectangular border (no radius) and a
-     hard 2px outline to read as a retro in-scene UI element. */
+  /* Small pixel-art icon+label button, overlaid on the stage corner rather
+     than sitting in the button row -- flat rectangular border (no radius)
+     and a hard 2px outline to read as a retro in-scene UI element. */
   .icon-btn {
     position: absolute;
     top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
-    padding: 0;
+    left: 8px;
+    padding: 5px 8px;
     background: #1f2129;
     border: 2px solid #0d0e12;
     box-shadow: inset 0 0 0 1px #4a4d5a;
@@ -73,10 +71,15 @@
     cursor: pointer;
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 6px;
+    font-family: inherit;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #cfd2dc;
   }
   .icon-btn:hover { box-shadow: inset 0 0 0 1px #7fd17f; }
-  .icon-btn canvas { width: 16px; height: 16px; }
+  .icon-btn canvas { width: 14px; height: 14px; }
   #skills-panel {
     display: flex;
     gap: 12px;
@@ -153,6 +156,14 @@
       <img src="/art/developer-theme/pixellab/v2/portrait/portrait.png" alt="Developer portrait" width="192" height="192" />
       <div>Developer</div>
     </div>
+    <!-- No separate portrait generated for chef -- character/base.png is
+         already a front-facing waist-up bust (the theme's own spec, see
+         art/chef-theme/pixellab/NOTES.md), so it doubles as the picker
+         card image for free. -->
+    <div class="choice" data-style="chef">
+      <img src="/art/chef-theme/pixellab/character/base.png" alt="Chef portrait" width="192" height="192" />
+      <div>Chef</div>
+    </div>
     <button id="picker-return-btn" hidden>Return</button>
   </div>
 
@@ -160,6 +171,7 @@
     <canvas id="stage" width="220" height="190"></canvas>
     <button id="skills-btn" class="icon-btn" aria-label="Skills">
       <canvas id="skills-icon" width="16" height="16"></canvas>
+      <span>Skills</span>
     </button>
   </div>
   <div id="buttons">

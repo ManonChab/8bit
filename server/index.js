@@ -32,7 +32,10 @@ app.post('/hooks/event', (req, res) => {
 
 app.get('/state', (req, res) => res.json(current));
 
-const KNOWN_BACKGROUNDS = ['none', 'developer'];
+// A style maps 1:1 to a background theme -- the portrait picker chooses
+// both together.
+const KNOWN_STYLES = ['developer', 'chef'];
+const KNOWN_BACKGROUNDS = ['none', 'developer', 'chef'];
 
 app.get('/avatar-config', (req, res) => {
   res.json(readAvatarConfig());
@@ -43,8 +46,8 @@ app.post('/avatar-config', (req, res) => {
   const next = { ...readAvatarConfig() };
 
   if (style !== undefined) {
-    if (style !== 'developer') {
-      return res.status(400).json({ error: 'style must be "developer"' });
+    if (!KNOWN_STYLES.includes(style)) {
+      return res.status(400).json({ error: `style must be one of: ${KNOWN_STYLES.join(', ')}` });
     }
     next.style = style;
   }
