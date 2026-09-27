@@ -88,14 +88,26 @@ function drawShadedCircle(ctx, cx, cy, radius, color) {
   ctx.stroke();
 }
 
-function drawCharacter(offCtx, { style, state, frame }) {
-  const palette = STYLES[style] || STYLES.a;
+// Themes whose character should sit at a desk instead of standing. Keeps
+// the "which pose" decision in one place as more themes get their own
+// contextual action later (#13).
+const SEATED_THEMES = new Set(['developer']);
+
+function drawHeadAndTorso(offCtx, palette, eyeColor) {
+  drawShadedRoundRect(offCtx, 9.5, 17, 13, 13, 3, palette.clothes);
+  drawShadedCircle(offCtx, 16, 10, 7, palette.skin);
+  drawShadedRoundRect(offCtx, 8, 2.5, 16, 8.5, 4, palette.hair);
+  drawShadedRoundRect(offCtx, 7.5, 6, 3, 7, 1.5, palette.hair);
+  drawShadedRoundRect(offCtx, 21.5, 6, 3, 7, 1.5, palette.hair);
+  offCtx.fillStyle = eyeColor;
+  offCtx.fillRect(12.5, 10, 2, 2);
+  offCtx.fillRect(17.5, 10, 2, 2);
+}
+
+function drawStandingCharacter(offCtx, { palette, state, frame, eyeColor }) {
   const bobFrames = state === 'active' ? ACTIVE_BOB : IDLE_BOB;
   const bob = state === 'error' ? 0 : bobFrames[frame % bobFrames.length];
-  const eyeColor = state === 'error' ? '#e05050' : '#20202a';
   const armsUp = state === 'active';
-
-  offCtx.clearRect(0, 0, OFFSCREEN_W, OFFSCREEN_H);
 
   // Legs/boots stay planted — only the chest/shoulders/head rise and fall,
   // so this reads as breathing rather than the whole character jumping.
@@ -115,19 +127,59 @@ function drawCharacter(offCtx, { style, state, frame }) {
     drawShadedRoundRect(offCtx, 5.5, 18, 4.5, 11, 2, palette.clothes);
     drawShadedRoundRect(offCtx, 22, 18, 4.5, 11, 2, palette.clothes);
   }
-  // Torso (chest)
-  drawShadedRoundRect(offCtx, 9.5, 17, 13, 13, 3, palette.clothes);
-  // Head + hair
-  drawShadedCircle(offCtx, 16, 10, 7, palette.skin);
-  drawShadedRoundRect(offCtx, 8, 2.5, 16, 8.5, 4, palette.hair);
-  drawShadedRoundRect(offCtx, 7.5, 6, 3, 7, 1.5, palette.hair);
-  drawShadedRoundRect(offCtx, 21.5, 6, 3, 7, 1.5, palette.hair);
-  // Eyes
-  offCtx.fillStyle = eyeColor;
-  offCtx.fillRect(12.5, 10, 2, 2);
-  offCtx.fillRect(17.5, 10, 2, 2);
+  drawHeadAndTorso(offCtx, palette, eyeColor);
 
   offCtx.restore();
+}
+
+// Sitting at a chair with a personal laptop drawn in the character's own
+// coordinate space (not the background's desk) so the hands always line
+// up with the laptop regardless of where the character sits on stage.
+function drawSeatedCharacter(offCtx, { palette, state, frame, eyeColor, t }) {
+  const bobFrames = IDLE_BOB; // breathing only while seated — no "jump" bob
+  const bob = bobFrames[frame % bobFrames.length];
+  const typing = state === 'active';
+  // Faster, independent phase for the typing hands than the breathing bob.
+  const typingPhase = typing ? Math.floor(t / 130) % 2 : 0;
+  const leftHandY = typing ? (typingPhase === 0 ? 27.5 : 28.5) : 28;
+  const rightHandY = typing ? (typingPhase === 0 ? 28.5 : 27.5) : 28;
+
+  // Chair back, drawn first so only its edges peek out from behind the torso.
+  drawShadedRoundRect(offCtx, 7, 19, 18, 15, 2, '#3d2b1f');
+
+  offCtx.save();
+  offCtx.translate(0, bob);
+
+  // Laptop, in front of the character at hand height.
+  drawShadedRoundRect(offCtx, 9, 26.5, 14, 3, 0.5, '#4a4d5a'); // base/keyboard
+  drawShadedRoundRect(offCtx, 10, 20.5, 12, 6, 0.5, '#20222b'); // screen
+  offCtx.fillStyle = '#6fe08a';
+  offCtx.fillRect(11.5, 22, 4, 0.7);
+  offCtx.fillStyle = '#6fbde0';
+  offCtx.fillRect(11.5, 23.3, 6, 0.7);
+  offCtx.fillStyle = '#e0c56f';
+  offCtx.fillRect(11.5, 24.6, 3, 0.7);
+
+  // Forearms/hands reaching down to the keyboard, alternating while typing.
+  drawShadedRoundRect(offCtx, 7.5, 20, 3, leftHandY - 20, 1, palette.clothes);
+  drawShadedRoundRect(offCtx, 21.5, 20, 3, rightHandY - 20, 1, palette.clothes);
+
+  drawHeadAndTorso(offCtx, palette, eyeColor);
+
+  offCtx.restore();
+}
+
+function drawCharacter(offCtx, { style, state, frame, background, t }) {
+  const palette = STYLES[style] || STYLES.a;
+  const eyeColor = state === 'error' ? '#e05050' : '#20202a';
+
+  offCtx.clearRect(0, 0, OFFSCREEN_W, OFFSCREEN_H);
+
+  if (SEATED_THEMES.has(background)) {
+    drawSeatedCharacter(offCtx, { palette, state, frame, eyeColor, t: t || 0 });
+  } else {
+    drawStandingCharacter(offCtx, { palette, state, frame, eyeColor });
+  }
 }
 
 // ---- Background scenes -------------------------------------------------
@@ -208,8 +260,8 @@ let currentState = 'idle';
 let currentSessionId = null;
 let socketConnected = false;
 
-function renderCharacterAt(targetCtx, style, state, frame, x, y, scale) {
-  drawCharacter(offCtx, { style, state, frame });
+function renderCharacterAt(targetCtx, style, state, frame, x, y, scale, background, t) {
+  drawCharacter(offCtx, { style, state, frame, background, t });
   targetCtx.imageSmoothingEnabled = false;
   targetCtx.drawImage(offscreen, x, y, OFFSCREEN_W * scale, OFFSCREEN_H * scale);
 }
@@ -294,7 +346,7 @@ function startRenderLoop() {
       }
       renderBackgroundInto(stageCtx, stage.width, stage.height, currentBackground);
       drawStatePulseOverlay(stageCtx, stage, currentState, t);
-      renderCharacterAt(stageCtx, currentStyle, currentState, frame, CHAR_X, CHAR_Y, SCALE_STAGE);
+      renderCharacterAt(stageCtx, currentStyle, currentState, frame, CHAR_X, CHAR_Y, SCALE_STAGE, currentBackground, t);
     }
     requestAnimationFrame(tick);
   }
