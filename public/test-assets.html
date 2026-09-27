@@ -17,9 +17,8 @@
     gap: 16px;
   }
   h1 { font-size: 13px; opacity: 0.6; font-weight: normal; letter-spacing: 0.1em; text-transform: uppercase; }
-  /* Every asset (background, character, objects) is displayed at the same
-     6x-native-pixel scale so relative sizes stay meaningful across images
-     that were generated at different native resolutions. */
+  /* Background and character are displayed at the same 6x-native-pixel
+     scale so relative sizes stay meaningful. */
   #stage {
     position: relative;
     width: 768px;  /* 128px background native width * 6 */
@@ -60,23 +59,17 @@
   }
   #buttons button:hover { border-color: #7fd17f; }
   #buttons button.active { border-color: #7fd17f; color: #7fd17f; }
-  #objects {
+  #anim-toggle {
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #cfd2dc;
+    opacity: 0.8;
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 16px;
-    align-items: flex-end;
-    background: #1f2129;
-    border: 3px solid #3a3d4a;
-    border-radius: 4px;
-    padding: 16px;
-    max-width: 768px;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
   }
-  .obj-card { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-  /* Native size * 6 (same scale as the stage) — NOT a fixed display height,
-     so relative real-world size between objects stays visible. */
-  .obj-card img { image-rendering: pixelated; }
-  .obj-card span { font-size: 10px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
 </style>
 </head>
 <body>
@@ -90,30 +83,63 @@
     <button data-state="working">Working</button>
     <button data-state="error">Error</button>
   </div>
-
-  <div id="objects">
-    <div class="obj-card"><img data-native-width="40" src="/art/developer-theme/pixellab/v2/objects/chair.png" alt="chair" /><span>Chair</span></div>
-    <div class="obj-card"><img data-native-width="72" src="/art/developer-theme/pixellab/v2/objects/desk.png" alt="desk" /><span>Desk</span></div>
-    <div class="obj-card"><img data-native-width="32" src="/art/developer-theme/pixellab/v2/objects/monitor.png" alt="monitor" /><span>Monitor</span></div>
-    <div class="obj-card"><img data-native-width="28" src="/art/developer-theme/pixellab/v2/objects/plant.png" alt="plant" /><span>Plant</span></div>
-    <div class="obj-card"><img data-native-width="40" src="/art/developer-theme/pixellab/v2/objects/keyboard.png" alt="keyboard" /><span>Keyboard</span></div>
-    <div class="obj-card"><img data-native-width="32" src="/art/developer-theme/pixellab/v2/objects/rubber-duck.png" alt="rubber duck" /><span>Rubber duck</span></div>
-  </div>
+  <label id="anim-toggle">
+    <input type="checkbox" id="anim-checkbox" checked />
+    animate (PixelLab animate-with-text-v3)
+  </label>
 
   <script>
-    const SCALE = 6;
-    document.querySelectorAll('.obj-card img').forEach((img) => {
-      img.style.width = `${Number(img.dataset.nativeWidth) * SCALE}px`;
-    });
-
     const sprite = document.getElementById('sprite');
+    const animCheckbox = document.getElementById('anim-checkbox');
+
+    // Last index in each state's animate-with-text-v3 output
+    // (frame-0.png..frame-N.png, N = frame_count -- see animations/NOTES.md).
+    const ANIM_LAST_FRAME = { idle: 4, working: 8, error: 8 };
+    const FRAME_MS = 140; // ~7fps, readable at pixel-art scale
+
+    let currentState = 'idle';
+    let frameIndex = 0;
+    let timer = null;
+
+    function framePath(state, index) {
+      return `/art/developer-theme/pixellab/v2/animations/${state}/frame-${index}.png`;
+    }
+
+    function stopAnim() {
+      if (timer) clearInterval(timer);
+      timer = null;
+    }
+
+    function startAnim() {
+      stopAnim();
+      frameIndex = 0;
+      timer = setInterval(() => {
+        frameIndex = (frameIndex + 1) % (ANIM_LAST_FRAME[currentState] + 1);
+        sprite.src = framePath(currentState, frameIndex);
+      }, FRAME_MS);
+    }
+
+    function render() {
+      if (animCheckbox.checked) {
+        startAnim();
+      } else {
+        stopAnim();
+        sprite.src = `/art/developer-theme/pixellab/v2/character/${currentState}.png`;
+      }
+    }
+
     document.querySelectorAll('#buttons button').forEach((btn) => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('#buttons button').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
-        sprite.src = `/art/developer-theme/pixellab/v2/character/${btn.dataset.state}.png`;
+        currentState = btn.dataset.state;
+        render();
       });
     });
+
+    animCheckbox.addEventListener('change', render);
+
+    render();
   </script>
 </body>
 </html>

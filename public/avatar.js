@@ -1,10 +1,13 @@
-// Placeholder 16-bit-style pixel avatar + background scenes (no external
-// image assets baked in here / no image-generation tool available in this
-// environment). Everything is drawn at low native resolution with shaded
-// primitives onto an offscreen canvas, then scaled up with
-// imageSmoothingEnabled=false — the standard trick for a crisp pixel-art
-// look without hand-placing every pixel. Real art can replace any of this
-// later without touching the state machine below.
+// Placeholder 16-bit-style pixel avatar + background scenes, drawn at low
+// native resolution with shaded primitives onto an offscreen canvas, then
+// scaled up with imageSmoothingEnabled=false — the standard trick for a
+// crisp pixel-art look without hand-placing every pixel. Used for the
+// "none" background and as a load-in fallback for themes with real art.
+//
+// Themes with real generated art (currently just "developer" — see
+// art/developer-theme/pixellab/v2/NOTES.md) render via the
+// REAL_ART_THEMES/realArt path below instead, without touching this
+// procedural state machine.
 
 const OFFSCREEN_W = 32;
 const OFFSCREEN_H = 42;
@@ -234,6 +237,69 @@ const BACKGROUND_THEMES = {
   developer: drawDeveloperScene,
 };
 
+// ---- Real PixelLab art (developer theme, animate-with-text-v3) --------
+// Generated stills + animations live under art/developer-theme/pixellab/v2/
+// (see that folder's NOTES.md for how). Only the "developer" theme has real
+// art so far (#8-#12 are still procedural) -- REAL_ART_THEMES is the single
+// switch a future theme flips once its own art pass lands.
+const REAL_ART_BASE = '/art/developer-theme/pixellab/v2';
+const REAL_ART_THEMES = new Set(['developer']);
+const REAL_BG_NATIVE_W = 128;
+const REAL_CHAR_NATIVE = 64;
+const REAL_ANIM_STATE_NAME = { idle: 'idle', active: 'working', error: 'error' };
+const REAL_ANIM_LAST_FRAME = { idle: 4, working: 8, error: 8 };
+const REAL_ANIM_FRAME_MS = 140; // ~7fps, matches public/test-assets.html
+
+function loadImage(src) {
+  const img = new Image();
+  img.src = src;
+  return img;
+}
+
+const realArt = {
+  background: loadImage(`${REAL_ART_BASE}/background/background.png`),
+  frames: Object.fromEntries(
+    Object.entries(REAL_ANIM_LAST_FRAME).map(([animState, lastFrame]) => [
+      animState,
+      Array.from({ length: lastFrame + 1 }, (_, i) =>
+        loadImage(`${REAL_ART_BASE}/animations/${animState}/frame-${i}.png`)
+      ),
+    ])
+  ),
+};
+
+function imageReady(img) {
+  return img.complete && img.naturalWidth > 0;
+}
+
+// Draws the real background if loaded, otherwise the procedural developer
+// scene as a placeholder for the brief window before images decode.
+function renderRealBackgroundInto(targetCtx, w, h) {
+  if (imageReady(realArt.background)) {
+    targetCtx.imageSmoothingEnabled = false;
+    targetCtx.drawImage(realArt.background, 0, 0, w, h);
+  } else {
+    drawDeveloperScene(bgOffCtx);
+    targetCtx.imageSmoothingEnabled = false;
+    targetCtx.drawImage(bgOffscreen, 0, 0, w, h);
+  }
+}
+
+// Draws the current animation frame for `state` if loaded, otherwise falls
+// back to the procedural seated character.
+function renderRealCharacterAt(targetCtx, state, t, x, y, w, h, style, frame) {
+  const animState = REAL_ANIM_STATE_NAME[state] || 'idle';
+  const frames = realArt.frames[animState];
+  const frameIndex = Math.floor(t / REAL_ANIM_FRAME_MS) % frames.length;
+  const img = frames[frameIndex];
+  if (imageReady(img)) {
+    targetCtx.imageSmoothingEnabled = false;
+    targetCtx.drawImage(img, x, y, w, h);
+  } else {
+    renderCharacterAt(targetCtx, style, state, frame, CHAR_X, CHAR_Y, SCALE_STAGE, 'developer', t);
+  }
+}
+
 // ---- App wiring ------------------------------------------------------
 
 const pickerEl = document.getElementById('picker');
@@ -300,7 +366,11 @@ function drawPreviewCharacter(canvasId, style) {
 function drawPreviewBackground(canvasId, backgroundId) {
   const canvas = document.getElementById(canvasId);
   const ctx = canvas.getContext('2d');
-  renderBackgroundInto(ctx, canvas.width, canvas.height, backgroundId);
+  if (REAL_ART_THEMES.has(backgroundId)) {
+    renderRealBackgroundInto(ctx, canvas.width, canvas.height);
+  } else {
+    renderBackgroundInto(ctx, canvas.width, canvas.height, backgroundId);
+  }
 }
 
 async function loadAvatarConfig() {
@@ -345,9 +415,28 @@ function startRenderLoop() {
         frame += 1;
         lastFrameTime = t;
       }
-      renderBackgroundInto(stageCtx, stage.width, stage.height, currentBackground);
-      drawStatePulseOverlay(stageCtx, stage, currentState, t);
-      renderCharacterAt(stageCtx, currentStyle, currentState, frame, CHAR_X, CHAR_Y, SCALE_STAGE, currentBackground, t);
+      if (REAL_ART_THEMES.has(currentBackground)) {
+        renderRealBackgroundInto(stageCtx, stage.width, stage.height);
+        drawStatePulseOverlay(stageCtx, stage, currentState, t);
+        const scale = stage.width / REAL_BG_NATIVE_W;
+        const charSize = REAL_CHAR_NATIVE * scale;
+        const marginRight = (48 / 768) * stage.width; // matches public/test-assets.html's right margin ratio
+        renderRealCharacterAt(
+          stageCtx,
+          currentState,
+          t,
+          stage.width - marginRight - charSize,
+          stage.height - charSize,
+          charSize,
+          charSize,
+          currentStyle,
+          frame
+        );
+      } else {
+        renderBackgroundInto(stageCtx, stage.width, stage.height, currentBackground);
+        drawStatePulseOverlay(stageCtx, stage, currentState, t);
+        renderCharacterAt(stageCtx, currentStyle, currentState, frame, CHAR_X, CHAR_Y, SCALE_STAGE, currentBackground, t);
+      }
     }
     requestAnimationFrame(tick);
   }
