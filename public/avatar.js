@@ -90,15 +90,17 @@ function drawCharacter(offCtx, { style, state, frame }) {
   const armsUp = state === 'active';
 
   offCtx.clearRect(0, 0, OFFSCREEN_W, OFFSCREEN_H);
+
+  // Legs/boots stay planted — only the chest/shoulders/head rise and fall,
+  // so this reads as breathing rather than the whole character jumping.
+  drawShadedRoundRect(offCtx, 10.5, 37, 5, 4, 1, '#181820');
+  drawShadedRoundRect(offCtx, 16.5, 37, 5, 4, 1, '#181820');
+  drawShadedRoundRect(offCtx, 11.5, 29, 4, 9, 1, '#2a2a35');
+  drawShadedRoundRect(offCtx, 17.5, 29, 4, 9, 1, '#2a2a35');
+
   offCtx.save();
   offCtx.translate(0, bob);
 
-  // Boots
-  drawShadedRoundRect(offCtx, 10.5, 37, 5, 4, 1, '#181820');
-  drawShadedRoundRect(offCtx, 16.5, 37, 5, 4, 1, '#181820');
-  // Legs
-  drawShadedRoundRect(offCtx, 11.5, 29, 4, 9, 1, '#2a2a35');
-  drawShadedRoundRect(offCtx, 17.5, 29, 4, 9, 1, '#2a2a35');
   // Arms (behind torso so the torso overlaps the shoulder joint cleanly)
   if (armsUp) {
     drawShadedRoundRect(offCtx, 4.5, 7, 4.5, 11, 2, palette.clothes);
@@ -107,7 +109,7 @@ function drawCharacter(offCtx, { style, state, frame }) {
     drawShadedRoundRect(offCtx, 5.5, 18, 4.5, 11, 2, palette.clothes);
     drawShadedRoundRect(offCtx, 22, 18, 4.5, 11, 2, palette.clothes);
   }
-  // Torso
+  // Torso (chest)
   drawShadedRoundRect(offCtx, 9.5, 17, 13, 13, 3, palette.clothes);
   // Head + hair
   drawShadedCircle(offCtx, 16, 10, 7, palette.skin);
