@@ -100,7 +100,7 @@ wss.on('error', handleServerError);
 
 server.listen(PORT, () => {
   const url = `http://localhost:${PORT}`;
-  console.log(`ClaudeCam running at ${url}`);
+  console.log(`Live Session running at ${url}`);
   openBrowser(url);
 });
 

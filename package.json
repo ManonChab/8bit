@@ -1,5 +1,5 @@
 {
-  "name": "claudecam",
+  "name": "live-session",
   "version": "0.1.0",
   "private": true,
   "description": "Local pixel-art avatar that reacts live to a Claude Code CLI session",
