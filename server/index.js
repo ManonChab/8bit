@@ -6,6 +6,7 @@ const { WebSocketServer } = require('ws');
 const { PORT } = require('./config');
 const { mapEventToState } = require('./eventMapper');
 const { readAvatarConfig, writeAvatarConfig } = require('./avatar-config');
+const { listSkills, getSkill } = require('./skills');
 
 const app = express();
 app.use(express.json());
@@ -56,6 +57,16 @@ app.post('/avatar-config', (req, res) => {
 
   writeAvatarConfig(next);
   res.json(next);
+});
+
+app.get('/skills', (req, res) => {
+  res.json(listSkills());
+});
+
+app.get('/skills/:name', (req, res) => {
+  const skill = getSkill(req.params.name);
+  if (!skill) return res.status(404).json({ error: `No skill named "${req.params.name}"` });
+  res.json(skill);
 });
 
 const server = http.createServer(app);

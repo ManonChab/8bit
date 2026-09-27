@@ -241,6 +241,7 @@ const bgPickerEl = document.getElementById('bg-picker');
 const stage = document.getElementById('stage');
 const styleBtn = document.getElementById('style-btn');
 const bgBtn = document.getElementById('bg-btn');
+const skillsBtn = document.getElementById('skills-btn');
 const labelEl = document.getElementById('label');
 const stageCtx = stage.getContext('2d');
 
@@ -361,6 +362,7 @@ function showStage() {
   stage.hidden = false;
   styleBtn.hidden = false;
   bgBtn.hidden = false;
+  skillsBtn.hidden = false;
   connectSocket();
   if (!renderLoopStarted) {
     renderLoopStarted = true;
@@ -369,10 +371,14 @@ function showStage() {
   updateLabel();
 }
 
+const skillsPanelEl = document.getElementById('skills-panel');
+
 function openStylePicker() {
   stage.hidden = true;
   styleBtn.hidden = true;
   bgBtn.hidden = true;
+  skillsBtn.hidden = true;
+  skillsPanelEl.hidden = true;
   pickerEl.hidden = false;
   drawPreviewCharacter('preview-a', 'a');
   drawPreviewCharacter('preview-b', 'b');
@@ -382,6 +388,8 @@ function openBackgroundPicker() {
   stage.hidden = true;
   styleBtn.hidden = true;
   bgBtn.hidden = true;
+  skillsBtn.hidden = true;
+  skillsPanelEl.hidden = true;
   bgPickerEl.hidden = false;
   drawPreviewBackground('preview-bg-none', 'none');
   drawPreviewBackground('preview-bg-developer', 'developer');

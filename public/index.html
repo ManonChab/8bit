@@ -36,7 +36,7 @@
   .choice:hover { border-color: #7fd17f; }
   #label { font-size: 12px; opacity: 0.75; letter-spacing: 0.05em; }
   h1 { font-size: 14px; opacity: 0.6; font-weight: normal; letter-spacing: 0.1em; text-transform: uppercase; }
-  #style-btn {
+  #buttons button {
     font-family: inherit;
     font-size: 11px;
     letter-spacing: 0.05em;
@@ -48,23 +48,68 @@
     padding: 6px 12px;
     cursor: pointer;
   }
-  #style-btn:hover { border-color: #7fd17f; }
-  #bg-btn {
-    font-family: inherit;
-    font-size: 11px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    background: #1f2129;
-    color: #cfd2dc;
-    border: 2px solid #3a3d4a;
-    border-radius: 4px;
-    padding: 6px 12px;
-    cursor: pointer;
-  }
-  #bg-btn:hover { border-color: #7fd17f; }
+  #buttons button:hover { border-color: #7fd17f; }
   #buttons { display: flex; gap: 8px; }
   #bg-picker { display: flex; gap: 20px; align-items: center; }
   #bg-picker[hidden] { display: none; }
+  #skills-panel {
+    display: flex;
+    gap: 12px;
+    width: min(640px, 92vw);
+    max-height: 320px;
+  }
+  #skills-panel[hidden] { display: none; }
+  #skills-list {
+    flex: 0 0 220px;
+    overflow-y: auto;
+    background: #1f2129;
+    border: 2px solid #3a3d4a;
+    border-radius: 4px;
+    padding: 6px;
+  }
+  .skill-item {
+    padding: 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-bottom: 4px;
+  }
+  .skill-item:hover, .skill-item.active { background: #2a2d3a; }
+  .skill-item .skill-name { font-size: 12px; color: #e8e8e8; }
+  .skill-item .skill-desc { font-size: 10px; opacity: 0.65; margin-top: 2px; line-height: 1.4; }
+  .skill-scope {
+    display: inline-block;
+    font-size: 9px;
+    text-transform: uppercase;
+    opacity: 0.6;
+    border: 1px solid #3a3d4a;
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin-left: 4px;
+  }
+  #skills-detail {
+    flex: 1;
+    overflow-y: auto;
+    background: #1f2129;
+    border: 2px solid #3a3d4a;
+    border-radius: 4px;
+    padding: 12px;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  #skills-detail pre { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; }
+  #skills-detail .empty { opacity: 0.5; }
+  #copy-invoke-btn {
+    font-family: inherit;
+    font-size: 10px;
+    background: #2a2d3a;
+    color: #cfd2dc;
+    border: 1px solid #3a3d4a;
+    border-radius: 3px;
+    padding: 4px 8px;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  #copy-invoke-btn:hover { border-color: #7fd17f; }
 </style>
 </head>
 <body>
@@ -96,9 +141,16 @@
   <div id="buttons">
     <button id="style-btn" hidden>Style</button>
     <button id="bg-btn" hidden>Background</button>
+    <button id="skills-btn" hidden>Skills</button>
   </div>
   <div id="label"></div>
 
+  <div id="skills-panel" hidden>
+    <div id="skills-list"></div>
+    <div id="skills-detail"><span class="empty">Select a skill to view details.</span></div>
+  </div>
+
   <script src="avatar.js"></script>
+  <script src="skills.js"></script>
 </body>
 </html>
