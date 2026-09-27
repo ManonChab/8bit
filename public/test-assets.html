@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>8bit — PixelLab asset test</title>
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: #14151a;
+    color: #e8e8e8;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+  h1 { font-size: 13px; opacity: 0.6; font-weight: normal; letter-spacing: 0.1em; text-transform: uppercase; }
+  /* Every asset (background, character, objects) is displayed at the same
+     6x-native-pixel scale so relative sizes stay meaningful across images
+     that were generated at different native resolutions. */
+  #stage {
+    position: relative;
+    width: 768px;  /* 128px background native width * 6 */
+    height: 672px; /* 112px background native height * 6 */
+    border: 3px solid #3a3d4a;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  #stage img {
+    image-rendering: pixelated;
+  }
+  #bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 768px;
+    height: 672px;
+  }
+  #sprite {
+    position: absolute;
+    width: 384px;  /* 64px character native * 6 */
+    height: 384px;
+    right: 48px;
+    bottom: 0;
+  }
+  #buttons { display: flex; gap: 8px; }
+  #buttons button {
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: #1f2129;
+    color: #cfd2dc;
+    border: 2px solid #3a3d4a;
+    border-radius: 4px;
+    padding: 8px 16px;
+    cursor: pointer;
+  }
+  #buttons button:hover { border-color: #7fd17f; }
+  #buttons button.active { border-color: #7fd17f; color: #7fd17f; }
+  #objects {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    align-items: flex-end;
+    background: #1f2129;
+    border: 3px solid #3a3d4a;
+    border-radius: 4px;
+    padding: 16px;
+    max-width: 768px;
+  }
+  .obj-card { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  /* Native size * 6 (same scale as the stage) — NOT a fixed display height,
+     so relative real-world size between objects stays visible. */
+  .obj-card img { image-rendering: pixelated; }
+  .obj-card span { font-size: 10px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
+</style>
+</head>
+<body>
+  <h1>developer theme — pixellab v2 (uniformized)</h1>
+  <div id="stage">
+    <img id="bg" src="/art/developer-theme/pixellab/v2/background/background.png" alt="background" />
+    <img id="sprite" src="/art/developer-theme/pixellab/v2/character/idle.png" alt="developer character" />
+  </div>
+  <div id="buttons">
+    <button data-state="idle" class="active">Idle</button>
+    <button data-state="working">Working</button>
+    <button data-state="error">Error</button>
+  </div>
+
+  <div id="objects">
+    <div class="obj-card"><img data-native-width="40" src="/art/developer-theme/pixellab/v2/objects/chair.png" alt="chair" /><span>Chair</span></div>
+    <div class="obj-card"><img data-native-width="72" src="/art/developer-theme/pixellab/v2/objects/desk.png" alt="desk" /><span>Desk</span></div>
+    <div class="obj-card"><img data-native-width="32" src="/art/developer-theme/pixellab/v2/objects/monitor.png" alt="monitor" /><span>Monitor</span></div>
+    <div class="obj-card"><img data-native-width="28" src="/art/developer-theme/pixellab/v2/objects/plant.png" alt="plant" /><span>Plant</span></div>
+    <div class="obj-card"><img data-native-width="40" src="/art/developer-theme/pixellab/v2/objects/keyboard.png" alt="keyboard" /><span>Keyboard</span></div>
+    <div class="obj-card"><img data-native-width="32" src="/art/developer-theme/pixellab/v2/objects/rubber-duck.png" alt="rubber duck" /><span>Rubber duck</span></div>
+  </div>
+
+  <script>
+    const SCALE = 6;
+    document.querySelectorAll('.obj-card img').forEach((img) => {
+      img.style.width = `${Number(img.dataset.nativeWidth) * SCALE}px`;
+    });
+
+    const sprite = document.getElementById('sprite');
+    document.querySelectorAll('#buttons button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#buttons button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        sprite.src = `/art/developer-theme/pixellab/v2/character/${btn.dataset.state}.png`;
+      });
+    });
+  </script>
+</body>
+</html>

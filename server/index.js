@@ -11,6 +11,7 @@ const { listSkills, getSkill } = require('./skills');
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use('/art', express.static(path.join(__dirname, '..', 'art')));
 
 let current = { sessionId: null, state: 'idle' };
 
