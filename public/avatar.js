@@ -243,10 +243,69 @@ const BACKGROUND_THEMES = {
 const REAL_ART_BASE = '/art/developer-theme/pixellab/v2';
 const REAL_ART_THEMES = new Set(['developer']);
 const REAL_BG_NATIVE_W = 128;
+const REAL_BG_NATIVE_H = 112;
 const REAL_CHAR_NATIVE = 64;
 const REAL_ANIM_STATE_NAME = { idle: 'idle', active: 'working', error: 'error' };
 const REAL_ANIM_LAST_FRAME = { idle: 4, working: 8, error: 8 };
 const REAL_ANIM_FRAME_MS = 140; // ~7fps, matches public/test-assets.html
+
+// Window glass bounding box within background.png, in native (128x112)
+// pixels -- measured directly off the art (see art/.../v2/background, the
+// window sits roughly centered, upper-middle). Used to clip the working-state
+// day/night cycle to just the window pane, so nothing else in the room moves.
+const WINDOW_RECT_NATIVE = { x: 46, y: 24, w: 48, h: 46 };
+const WINDOW_MULLION_COLOR = '#1f2543';
+const DAY_NIGHT_CYCLE_MS = 4000;
+const SKY_DAY_COLOR = '#6a8fc2';
+const SKY_NIGHT_COLOR = '#0d1024';
+const SUN_COLOR = '#f4b942';
+const MOON_COLOR = '#d8dce8';
+
+// While "working," the window cycles a fast day -> night -> day loop (sun
+// sweeps left-to-right, then the moon follows the same path against a dark
+// sky) instead of the flash overlay used for other states. Everything
+// outside the clipped window rect is untouched -- the room, desk, and
+// character never move because of this.
+function renderWindowDayNightCycle(targetCtx, stageW, stageH, t) {
+  const scaleX = stageW / REAL_BG_NATIVE_W;
+  const scaleY = stageH / REAL_BG_NATIVE_H;
+  const wx = WINDOW_RECT_NATIVE.x * scaleX;
+  const wy = WINDOW_RECT_NATIVE.y * scaleY;
+  const ww = WINDOW_RECT_NATIVE.w * scaleX;
+  const wh = WINDOW_RECT_NATIVE.h * scaleY;
+
+  const phase = (t % DAY_NIGHT_CYCLE_MS) / DAY_NIGHT_CYCLE_MS;
+  const isDay = phase < 0.5;
+  const local = isDay ? phase * 2 : (phase - 0.5) * 2; // 0..1 within this half
+
+  targetCtx.save();
+  targetCtx.beginPath();
+  targetCtx.rect(wx, wy, ww, wh);
+  targetCtx.clip();
+
+  targetCtx.fillStyle = isDay ? SKY_DAY_COLOR : SKY_NIGHT_COLOR;
+  targetCtx.fillRect(wx, wy, ww, wh);
+
+  const bodyR = Math.max(2, ww * 0.09);
+  const bodyX = wx + bodyR + local * (ww - bodyR * 2);
+  const bodyY = wy + wh * 0.6 - Math.sin(local * Math.PI) * wh * 0.35; // rise/set arc
+  drawShadedCircle(targetCtx, bodyX, bodyY, bodyR, isDay ? SUN_COLOR : MOON_COLOR);
+
+  targetCtx.restore();
+
+  // Redraw the window's cross mullion on top so the 4-pane look survives
+  // the sky fill underneath it.
+  targetCtx.strokeStyle = WINDOW_MULLION_COLOR;
+  targetCtx.lineWidth = Math.max(1, scaleX);
+  const midX = wx + ww / 2;
+  const midY = wy + wh / 2;
+  targetCtx.beginPath();
+  targetCtx.moveTo(midX, wy);
+  targetCtx.lineTo(midX, wy + wh);
+  targetCtx.moveTo(wx, midY);
+  targetCtx.lineTo(wx + ww, midY);
+  targetCtx.stroke();
+}
 
 function loadImage(src) {
   const img = new Image();
@@ -409,7 +468,11 @@ function startRenderLoop() {
       }
       if (REAL_ART_THEMES.has(currentBackground)) {
         renderRealBackgroundInto(stageCtx, stage.width, stage.height);
-        drawStatePulseOverlay(stageCtx, stage, currentState, t);
+        if (currentState === 'active') {
+          renderWindowDayNightCycle(stageCtx, stage.width, stage.height, t);
+        } else {
+          drawStatePulseOverlay(stageCtx, stage, currentState, t);
+        }
         const scale = stage.width / REAL_BG_NATIVE_W;
         const charSize = REAL_CHAR_NATIVE * scale;
         const marginRight = (48 / 768) * stage.width; // matches public/test-assets.html's right margin ratio
