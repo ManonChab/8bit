@@ -1,103 +1,169 @@
-// Placeholder 16-bit-style pixel avatar, drawn procedurally on a canvas grid
-// (no external image assets / no image-generation tool available). Real art
-// can replace this renderer later without touching the state machine below.
+// Placeholder 16-bit-style pixel avatar (no external image assets / no
+// image-generation tool available). Drawn at low native resolution with
+// shaded primitives onto an offscreen canvas, then scaled up with
+// imageSmoothingEnabled=false — the standard trick for a crisp pixel-art
+// look without hand-placing every pixel. Real art can replace this
+// renderer later without touching the state machine below.
 
-const PIXEL = 10;
+const OFFSCREEN_W = 32;
+const OFFSCREEN_H = 42;
+const SCALE_STAGE = 4;
+const SCALE_PREVIEW = 3;
 
 const STYLES = {
   a: { hair: '#f4a53a', clothes: '#3a6df4', skin: '#f2c9a0' },
   b: { hair: '#3a54f4', clothes: '#c23a6d', skin: '#f2c9a0' },
 };
 
-// Coordinate lists on a 10 (wide) x 13 (tall) grid. Kept as named parts so
-// pose variants (arms up/down, eye color) can be swapped independently.
-const PARTS = {
-  hair: [
-    [2, 0], [3, 0], [4, 0], [5, 0], [6, 0], [7, 0],
-    [1, 1], [2, 1], [3, 1], [4, 1], [5, 1], [6, 1], [7, 1], [8, 1],
-  ],
-  head: [
-    [2, 2], [3, 2], [4, 2], [5, 2], [6, 2], [7, 2],
-    [2, 3], [3, 3], [4, 3], [5, 3], [6, 3], [7, 3],
-    [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4],
-    [2, 5], [3, 5], [4, 5], [5, 5], [6, 5], [7, 5],
-  ],
-  eyes: [[3, 4], [6, 4]],
-  body: [
-    [3, 6], [4, 6], [5, 6], [6, 6],
-    [2, 7], [3, 7], [4, 7], [5, 7], [6, 7], [7, 7],
-    [2, 8], [3, 8], [4, 8], [5, 8], [6, 8], [7, 8],
-  ],
-  armsDown: [[1, 7], [1, 8], [8, 7], [8, 8]],
-  armsUp: [[1, 5], [1, 6], [8, 5], [8, 6]],
-  legs: [[3, 9], [4, 9], [5, 9], [6, 9], [3, 10], [4, 10], [5, 10], [6, 10]],
-  boots: [[3, 11], [4, 11], [5, 11], [6, 11]],
-};
-
-// One subtle bob per frame = idle "breathing" loop (4 frames, per game-art
-// guidance for idle animation).
-const IDLE_BOB = [0, -1, 0, 1];
+const IDLE_BOB = [0, -1, 0, 1]; // subtle idle "breathing" loop
 const ACTIVE_BOB = [0, -1, -1, 0];
 
-function drawAvatar(ctx, { style, state, frame, originX = 0, originY = 0 }) {
+function shade(hex, amount) {
+  const n = parseInt(hex.slice(1), 16);
+  const clamp = (v) => Math.max(0, Math.min(255, v));
+  const r = clamp(((n >> 16) & 0xff) + amount);
+  const g = clamp(((n >> 8) & 0xff) + amount);
+  const b = clamp((n & 0xff) + amount);
+  return `rgb(${r},${g},${b})`;
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  if (ctx.roundRect) {
+    ctx.roundRect(x, y, w, h, r);
+  } else {
+    ctx.rect(x, y, w, h); // fallback for older browsers
+  }
+}
+
+// Shadow fill (full shape, darker) -> base fill (slightly inset, true
+// color) -> highlight patch (small, lighter, top-left) -> outline stroke.
+// This 3-band shading is what actually reads as "16-bit" rather than
+// "flat 8-bit block," more than resolution alone.
+function drawShadedRoundRect(ctx, x, y, w, h, r, color) {
+  roundRectPath(ctx, x, y, w, h, r);
+  ctx.fillStyle = shade(color, -45);
+  ctx.fill();
+
+  roundRectPath(ctx, x, y, w * 0.82, h * 0.85, r);
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  roundRectPath(ctx, x + w * 0.12, y + h * 0.1, w * 0.32, h * 0.28, Math.max(r * 0.5, 0.5));
+  ctx.fillStyle = shade(color, 55);
+  ctx.fill();
+
+  roundRectPath(ctx, x, y, w, h, r);
+  ctx.strokeStyle = '#1a1a22';
+  ctx.lineWidth = 0.6;
+  ctx.stroke();
+}
+
+function drawShadedCircle(ctx, cx, cy, radius, color) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fillStyle = shade(color, -40);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx - radius * 0.05, cy, radius * 0.88, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx - radius * 0.35, cy - radius * 0.35, radius * 0.32, 0, Math.PI * 2);
+  ctx.fillStyle = shade(color, 55);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = '#1a1a22';
+  ctx.lineWidth = 0.6;
+  ctx.stroke();
+}
+
+function drawCharacter(offCtx, { style, state, frame }) {
   const palette = STYLES[style] || STYLES.a;
   const bobFrames = state === 'active' ? ACTIVE_BOB : IDLE_BOB;
   const bob = state === 'error' ? 0 : bobFrames[frame % bobFrames.length];
-  const arms = state === 'active' ? PARTS.armsUp : PARTS.armsDown;
   const eyeColor = state === 'error' ? '#e05050' : '#20202a';
+  const armsUp = state === 'active';
 
-  ctx.imageSmoothingEnabled = false;
+  offCtx.clearRect(0, 0, OFFSCREEN_W, OFFSCREEN_H);
+  offCtx.save();
+  offCtx.translate(0, bob);
 
-  const plot = (cells, color) => {
-    ctx.fillStyle = color;
-    for (const [x, y] of cells) {
-      ctx.fillRect(originX + x * PIXEL, originY + (y + bob) * PIXEL, PIXEL, PIXEL);
-    }
-  };
+  // Boots
+  drawShadedRoundRect(offCtx, 10.5, 37, 5, 4, 1, '#181820');
+  drawShadedRoundRect(offCtx, 16.5, 37, 5, 4, 1, '#181820');
+  // Legs
+  drawShadedRoundRect(offCtx, 11.5, 29, 4, 9, 1, '#2a2a35');
+  drawShadedRoundRect(offCtx, 17.5, 29, 4, 9, 1, '#2a2a35');
+  // Arms (behind torso so the torso overlaps the shoulder joint cleanly)
+  if (armsUp) {
+    drawShadedRoundRect(offCtx, 4.5, 7, 4.5, 11, 2, palette.clothes);
+    drawShadedRoundRect(offCtx, 23, 7, 4.5, 11, 2, palette.clothes);
+  } else {
+    drawShadedRoundRect(offCtx, 5.5, 18, 4.5, 11, 2, palette.clothes);
+    drawShadedRoundRect(offCtx, 22, 18, 4.5, 11, 2, palette.clothes);
+  }
+  // Torso
+  drawShadedRoundRect(offCtx, 9.5, 17, 13, 13, 3, palette.clothes);
+  // Head + hair
+  drawShadedCircle(offCtx, 16, 10, 7, palette.skin);
+  drawShadedRoundRect(offCtx, 8, 2.5, 16, 8.5, 4, palette.hair);
+  drawShadedRoundRect(offCtx, 7.5, 6, 3, 7, 1.5, palette.hair);
+  drawShadedRoundRect(offCtx, 21.5, 6, 3, 7, 1.5, palette.hair);
+  // Eyes
+  offCtx.fillStyle = eyeColor;
+  offCtx.fillRect(12.5, 10, 2, 2);
+  offCtx.fillRect(17.5, 10, 2, 2);
 
-  plot(PARTS.hair, palette.hair);
-  plot(PARTS.head, palette.skin);
-  plot(PARTS.body, palette.clothes);
-  plot(arms, palette.clothes);
-  plot(PARTS.legs, '#2a2a35');
-  plot(PARTS.boots, '#181820');
-  plot(PARTS.eyes, eyeColor);
+  offCtx.restore();
 }
 
 function pulseBackground(ctx, canvas, state, t) {
-  let color = '#1f2129';
-  if (state === 'active') {
-    const glow = 0.15 + 0.1 * Math.sin(t / 220);
-    color = `rgba(244, 197, 66, ${glow.toFixed(2)})`;
-  } else if (state === 'error') {
-    const glow = 0.25 + 0.15 * Math.sin(t / 160);
-    color = `rgba(224, 80, 80, ${glow.toFixed(2)})`;
-  }
   ctx.fillStyle = '#1f2129';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (state !== 'idle') {
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
+  if (state === 'idle') return;
+  const isError = state === 'error';
+  const glow = (isError ? 0.25 : 0.15) + (isError ? 0.15 : 0.1) * Math.sin(t / (isError ? 160 : 220));
+  ctx.fillStyle = isError
+    ? `rgba(224, 80, 80, ${glow.toFixed(2)})`
+    : `rgba(244, 197, 66, ${glow.toFixed(2)})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 // ---- App wiring ------------------------------------------------------
 
 const pickerEl = document.getElementById('picker');
 const stage = document.getElementById('stage');
+const styleBtn = document.getElementById('style-btn');
 const labelEl = document.getElementById('label');
 const stageCtx = stage.getContext('2d');
+
+const offscreen = document.createElement('canvas');
+offscreen.width = OFFSCREEN_W;
+offscreen.height = OFFSCREEN_H;
+const offCtx = offscreen.getContext('2d');
 
 let currentStyle = null;
 let currentState = 'idle';
 let currentSessionId = null;
+let socketConnected = false;
+
+function renderCharacterAt(targetCtx, style, state, frame, x, y, scale) {
+  drawCharacter(offCtx, { style, state, frame });
+  targetCtx.imageSmoothingEnabled = false;
+  targetCtx.drawImage(offscreen, x, y, OFFSCREEN_W * scale, OFFSCREEN_H * scale);
+}
 
 function drawPreview(canvasId, style) {
   const canvas = document.getElementById(canvasId);
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#1f2129';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  drawAvatar(ctx, { style, state: 'idle', frame: 0, originX: 10, originY: 5 });
+  renderCharacterAt(ctx, style, 'idle', 0, 2, 2, SCALE_PREVIEW);
 }
 
 async function loadAvatarConfig() {
@@ -114,6 +180,8 @@ async function saveAvatarStyle(style) {
 }
 
 function connectSocket() {
+  if (socketConnected) return;
+  socketConnected = true;
   const ws = new WebSocket(`ws://${location.host}`);
   ws.addEventListener('message', (event) => {
     const payload = JSON.parse(event.data);
@@ -132,50 +200,63 @@ function updateLabel() {
 function startRenderLoop() {
   let frame = 0;
   let lastFrameTime = 0;
-  const FRAME_INTERVAL = 250; // ms per idle/active animation frame
+  const FRAME_INTERVAL = 250;
 
   function tick(t) {
-    if (document.hidden) {
-      requestAnimationFrame(tick); // paused visually via early background skip below
-      return;
+    if (!document.hidden) {
+      if (t - lastFrameTime > FRAME_INTERVAL) {
+        frame += 1;
+        lastFrameTime = t;
+      }
+      pulseBackground(stageCtx, stage, currentState, t);
+      renderCharacterAt(stageCtx, currentStyle, currentState, frame, 18, 8, SCALE_STAGE);
     }
-    if (t - lastFrameTime > FRAME_INTERVAL) {
-      frame += 1;
-      lastFrameTime = t;
-    }
-    pulseBackground(stageCtx, stage, currentState, t);
-    drawAvatar(stageCtx, { style: currentStyle, state: currentState, frame, originX: 20, originY: 10 });
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
 }
 
+let renderLoopStarted = false;
+
+function showStage() {
+  pickerEl.hidden = true;
+  stage.hidden = false;
+  styleBtn.hidden = false;
+  connectSocket();
+  if (!renderLoopStarted) {
+    renderLoopStarted = true;
+    startRenderLoop();
+  }
+  updateLabel();
+}
+
+function openPicker() {
+  stage.hidden = true;
+  styleBtn.hidden = true;
+  pickerEl.hidden = false;
+  drawPreview('preview-a', 'a');
+  drawPreview('preview-b', 'b');
+}
+
+pickerEl.querySelectorAll('.choice').forEach((el) => {
+  el.addEventListener('click', async () => {
+    const style = el.dataset.style;
+    await saveAvatarStyle(style);
+    currentStyle = style;
+    showStage();
+  });
+});
+
+styleBtn.addEventListener('click', openPicker);
+
 async function init() {
   const config = await loadAvatarConfig();
   if (config.style === 'a' || config.style === 'b') {
     currentStyle = config.style;
-    stage.hidden = false;
-    connectSocket();
-    startRenderLoop();
-    updateLabel();
-    return;
+    showStage();
+  } else {
+    openPicker();
   }
-
-  pickerEl.hidden = false;
-  drawPreview('preview-a', 'a');
-  drawPreview('preview-b', 'b');
-  pickerEl.querySelectorAll('.choice').forEach((el) => {
-    el.addEventListener('click', async () => {
-      const style = el.dataset.style;
-      await saveAvatarStyle(style);
-      currentStyle = style;
-      pickerEl.hidden = true;
-      stage.hidden = false;
-      connectSocket();
-      startRenderLoop();
-      updateLabel();
-    });
-  });
 }
 
 init();
