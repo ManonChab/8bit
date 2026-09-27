@@ -261,6 +261,20 @@ const SKY_NIGHT_COLOR = '#0d1024';
 const SUN_COLOR = '#f4b942';
 const MOON_COLOR = '#d8dce8';
 
+// Field + a low, distant town sitting on the horizon, kept below the
+// sun/moon's arc so neither ever overlaps the skyline.
+const HORIZON_RATIO = 0.72; // fraction down the window where field meets sky
+const FIELD_DAY_COLOR = '#4f7a3d';
+const FIELD_NIGHT_COLOR = '#141f14';
+const TOWN_DAY_COLOR = '#241f30';
+const TOWN_NIGHT_COLOR = '#23283f';
+// [xRatio, widthRatio, heightRatio] of the window, left-to-right -- a small
+// uneven skyline rather than uniform blocks.
+const TOWN_BUILDINGS = [
+  [0.04, 0.11, 0.16], [0.16, 0.08, 0.11], [0.25, 0.13, 0.23], [0.40, 0.08, 0.13],
+  [0.50, 0.15, 0.17], [0.68, 0.09, 0.21], [0.80, 0.12, 0.14],
+];
+
 // While "working," the window cycles a fast day -> night -> day loop (sun
 // sweeps left-to-right, then the moon follows the same path against a dark
 // sky) instead of the flash overlay used for other states. Everything
@@ -290,6 +304,21 @@ function renderWindowDayNightCycle(targetCtx, stageW, stageH, t) {
   const bodyX = wx + bodyR + local * (ww - bodyR * 2);
   const bodyY = wy + wh * 0.6 - Math.sin(local * Math.PI) * wh * 0.35; // rise/set arc
   drawShadedCircle(targetCtx, bodyX, bodyY, bodyR, isDay ? SUN_COLOR : MOON_COLOR);
+
+  // Field + skyline sit on top of the sky/sun so the body appears to travel
+  // behind the horizon at the edges of its sweep, then the town silhouette
+  // on top of that.
+  const horizonY = wy + wh * HORIZON_RATIO;
+  targetCtx.fillStyle = isDay ? FIELD_DAY_COLOR : FIELD_NIGHT_COLOR;
+  targetCtx.fillRect(wx, horizonY, ww, wy + wh - horizonY);
+
+  targetCtx.fillStyle = isDay ? TOWN_DAY_COLOR : TOWN_NIGHT_COLOR;
+  TOWN_BUILDINGS.forEach(([xr, wr, hr]) => {
+    const bx = wx + xr * ww;
+    const bw = wr * ww;
+    const bh = hr * wh;
+    targetCtx.fillRect(bx, horizonY - bh, bw, bh + 2);
+  });
 
   targetCtx.restore();
 
@@ -365,6 +394,9 @@ const stageWrap = document.getElementById('stage-wrap');
 const stage = document.getElementById('stage');
 const styleBtn = document.getElementById('style-btn');
 const skillsBtn = document.getElementById('skills-btn');
+// TEMPORARY dev tool -- see the matching HTML comment in index.html.
+const testStateBtn = document.getElementById('test-state-btn');
+const testStatePanel = document.getElementById('test-state-panel');
 const skillsIconCanvas = document.getElementById('skills-icon');
 const labelEl = document.getElementById('label');
 const stageCtx = stage.getContext('2d');
@@ -505,6 +537,7 @@ function showStage() {
   stageWrap.hidden = false;
   styleBtn.hidden = false;
   skillsBtn.hidden = false;
+  testStateBtn.hidden = false;
   connectSocket();
   if (!renderLoopStarted) {
     renderLoopStarted = true;
@@ -519,6 +552,8 @@ function openStylePicker() {
   stageWrap.hidden = true;
   styleBtn.hidden = true;
   skillsBtn.hidden = true;
+  testStateBtn.hidden = true;
+  testStatePanel.hidden = true;
   skillsPanelEl.hidden = true;
   pickerEl.hidden = false;
   // Only offer a way back to the stage once a style has actually been
@@ -538,6 +573,21 @@ pickerEl.querySelectorAll('.choice').forEach((el) => {
 pickerReturnBtn.addEventListener('click', showStage);
 
 styleBtn.addEventListener('click', openStylePicker);
+
+// TEMPORARY dev tool: force currentState locally so an animation can be
+// previewed without sending a real hook event. A live hook event (or
+// another click here) overrides it immediately, same as any other state
+// change -- this never touches the server's own state.
+testStateBtn.addEventListener('click', () => {
+  testStatePanel.hidden = !testStatePanel.hidden;
+});
+testStatePanel.querySelectorAll('button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    currentState = btn.dataset.testState;
+    currentSessionId = currentSessionId || 'test';
+    updateLabel();
+  });
+});
 
 drawSkillsIcon();
 
