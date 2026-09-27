@@ -57,13 +57,19 @@ wss.on('connection', (socket) => {
   socket.send(JSON.stringify(current));
 });
 
-server.on('error', (err) => {
+function handleServerError(err) {
   if (err.code === 'EADDRINUSE') {
     console.error(`Port ${PORT} is already in use. Set the PORT env var to use a different one.`);
     process.exit(1);
   }
   throw err;
-});
+}
+
+// The 'ws' library attaches to the underlying net.Server and re-emits listen
+// failures on the WebSocketServer instance rather than the http.Server, so
+// both need a listener to catch EADDRINUSE reliably.
+server.on('error', handleServerError);
+wss.on('error', handleServerError);
 
 server.listen(PORT, () => {
   const url = `http://localhost:${PORT}`;
