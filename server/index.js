@@ -30,17 +30,32 @@ app.post('/hooks/event', (req, res) => {
 
 app.get('/state', (req, res) => res.json(current));
 
+const KNOWN_BACKGROUNDS = ['none', 'developer'];
+
 app.get('/avatar-config', (req, res) => {
   res.json(readAvatarConfig());
 });
 
 app.post('/avatar-config', (req, res) => {
-  const { style } = req.body || {};
-  if (style !== 'a' && style !== 'b') {
-    return res.status(400).json({ error: 'style must be "a" or "b"' });
+  const { style, background } = req.body || {};
+  const next = { ...readAvatarConfig() };
+
+  if (style !== undefined) {
+    if (style !== 'a' && style !== 'b') {
+      return res.status(400).json({ error: 'style must be "a" or "b"' });
+    }
+    next.style = style;
   }
-  writeAvatarConfig({ style });
-  res.json({ style });
+
+  if (background !== undefined) {
+    if (!KNOWN_BACKGROUNDS.includes(background)) {
+      return res.status(400).json({ error: `background must be one of: ${KNOWN_BACKGROUNDS.join(', ')}` });
+    }
+    next.background = background;
+  }
+
+  writeAvatarConfig(next);
+  res.json(next);
 });
 
 const server = http.createServer(app);

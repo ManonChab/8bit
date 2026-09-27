@@ -49,6 +49,22 @@
     cursor: pointer;
   }
   #style-btn:hover { border-color: #7fd17f; }
+  #bg-btn {
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: #1f2129;
+    color: #cfd2dc;
+    border: 2px solid #3a3d4a;
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  #bg-btn:hover { border-color: #7fd17f; }
+  #buttons { display: flex; gap: 8px; }
+  #bg-picker { display: flex; gap: 20px; align-items: center; }
+  #bg-picker[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -65,8 +81,22 @@
     </div>
   </div>
 
-  <canvas id="stage" width="170" height="190" hidden></canvas>
-  <button id="style-btn" hidden>Style</button>
+  <div id="bg-picker" hidden>
+    <div class="choice" data-background="none">
+      <canvas id="preview-bg-none" width="90" height="70"></canvas>
+      <div>None</div>
+    </div>
+    <div class="choice" data-background="developer">
+      <canvas id="preview-bg-developer" width="90" height="70"></canvas>
+      <div>Developer</div>
+    </div>
+  </div>
+
+  <canvas id="stage" width="220" height="190" hidden></canvas>
+  <div id="buttons">
+    <button id="style-btn" hidden>Style</button>
+    <button id="bg-btn" hidden>Background</button>
+  </div>
   <div id="label"></div>
 
   <script src="avatar.js"></script>

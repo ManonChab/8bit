@@ -1,14 +1,20 @@
-// Placeholder 16-bit-style pixel avatar (no external image assets / no
-// image-generation tool available). Drawn at low native resolution with
-// shaded primitives onto an offscreen canvas, then scaled up with
+// Placeholder 16-bit-style pixel avatar + background scenes (no external
+// image assets baked in here / no image-generation tool available in this
+// environment). Everything is drawn at low native resolution with shaded
+// primitives onto an offscreen canvas, then scaled up with
 // imageSmoothingEnabled=false — the standard trick for a crisp pixel-art
-// look without hand-placing every pixel. Real art can replace this
-// renderer later without touching the state machine below.
+// look without hand-placing every pixel. Real art can replace any of this
+// later without touching the state machine below.
 
 const OFFSCREEN_W = 32;
 const OFFSCREEN_H = 42;
 const SCALE_STAGE = 4;
 const SCALE_PREVIEW = 3;
+const CHAR_X = 14;
+const CHAR_Y = 8;
+
+const BG_GRID_W = 55;
+const BG_GRID_H = 48;
 
 const STYLES = {
   a: { hair: '#f4a53a', clothes: '#3a6df4', skin: '#f2c9a0' },
@@ -124,23 +130,65 @@ function drawCharacter(offCtx, { style, state, frame }) {
   offCtx.restore();
 }
 
-function pulseBackground(ctx, canvas, state, t) {
+// ---- Background scenes -------------------------------------------------
+// Drawn on their own low-res grid (independent of the character's), then
+// stretched to fill the stage canvas — same "chunky pixel" technique as
+// the character, so the two layers read as one consistent style.
+
+function drawPlainScene(ctx, w, h) {
   ctx.fillStyle = '#1f2129';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (state === 'idle') return;
-  const isError = state === 'error';
-  const glow = (isError ? 0.25 : 0.15) + (isError ? 0.15 : 0.1) * Math.sin(t / (isError ? 160 : 220));
-  ctx.fillStyle = isError
-    ? `rgba(224, 80, 80, ${glow.toFixed(2)})`
-    : `rgba(244, 197, 66, ${glow.toFixed(2)})`;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, w, h);
 }
+
+function drawDeveloperScene(ctx) {
+  // Wall
+  ctx.fillStyle = '#262a35';
+  ctx.fillRect(0, 0, BG_GRID_W, BG_GRID_H);
+  // Faint window, upper right
+  drawShadedRoundRect(ctx, 42, 4, 10, 9, 1, '#3a4a5c');
+  // Floor strip
+  ctx.fillStyle = '#1c1e26';
+  ctx.fillRect(0, 44, BG_GRID_W, 4);
+
+  // Desk (full-width band near the bottom, character stands in front of it)
+  drawShadedRoundRect(ctx, 2, 33, 51, 11, 1, '#8a5a34');
+
+  // Monitor, positioned to the right of where the character stands
+  drawShadedRoundRect(ctx, 37, 12, 15, 12, 1, '#20222b'); // bezel
+  ctx.fillStyle = '#16324a';
+  ctx.fillRect(39, 14, 11, 8); // screen
+  // A few short "code line" pixels on the screen
+  ctx.fillStyle = '#6fe08a';
+  ctx.fillRect(40, 15.5, 4, 0.8);
+  ctx.fillStyle = '#e0c56f';
+  ctx.fillRect(40, 17, 6, 0.8);
+  ctx.fillStyle = '#6fbde0';
+  ctx.fillRect(40, 18.5, 3, 0.8);
+  ctx.fillStyle = '#e0c56f';
+  ctx.fillRect(40, 20, 5, 0.8);
+  // Monitor stand
+  drawShadedRoundRect(ctx, 43, 24, 3, 4, 0.5, '#3a3d4a');
+
+  // Keyboard on the desk in front of the monitor
+  drawShadedRoundRect(ctx, 38, 29, 13, 3.5, 0.5, '#4a4d5a');
+
+  // Coffee mug beside the keyboard
+  drawShadedRoundRect(ctx, 33, 27, 4, 5, 1, '#e8e8e8');
+  ctx.fillStyle = '#3a2a1e';
+  ctx.fillRect(34, 27.5, 2, 1); // coffee surface
+}
+
+const BACKGROUND_THEMES = {
+  developer: drawDeveloperScene,
+};
 
 // ---- App wiring ------------------------------------------------------
 
 const pickerEl = document.getElementById('picker');
+const bgPickerEl = document.getElementById('bg-picker');
 const stage = document.getElementById('stage');
 const styleBtn = document.getElementById('style-btn');
+const bgBtn = document.getElementById('bg-btn');
 const labelEl = document.getElementById('label');
 const stageCtx = stage.getContext('2d');
 
@@ -149,7 +197,13 @@ offscreen.width = OFFSCREEN_W;
 offscreen.height = OFFSCREEN_H;
 const offCtx = offscreen.getContext('2d');
 
+const bgOffscreen = document.createElement('canvas');
+bgOffscreen.width = BG_GRID_W;
+bgOffscreen.height = BG_GRID_H;
+const bgOffCtx = bgOffscreen.getContext('2d');
+
 let currentStyle = null;
+let currentBackground = 'none';
 let currentState = 'idle';
 let currentSessionId = null;
 let socketConnected = false;
@@ -160,7 +214,29 @@ function renderCharacterAt(targetCtx, style, state, frame, x, y, scale) {
   targetCtx.drawImage(offscreen, x, y, OFFSCREEN_W * scale, OFFSCREEN_H * scale);
 }
 
-function drawPreview(canvasId, style) {
+function renderBackgroundInto(targetCtx, w, h, backgroundId) {
+  const themeDraw = BACKGROUND_THEMES[backgroundId];
+  if (!themeDraw) {
+    drawPlainScene(targetCtx, w, h);
+    return;
+  }
+  bgOffCtx.clearRect(0, 0, BG_GRID_W, BG_GRID_H);
+  themeDraw(bgOffCtx);
+  targetCtx.imageSmoothingEnabled = false;
+  targetCtx.drawImage(bgOffscreen, 0, 0, w, h);
+}
+
+function drawStatePulseOverlay(ctx, canvas, state, t) {
+  if (state === 'idle') return;
+  const isError = state === 'error';
+  const glow = (isError ? 0.25 : 0.15) + (isError ? 0.15 : 0.1) * Math.sin(t / (isError ? 160 : 220));
+  ctx.fillStyle = isError
+    ? `rgba(224, 80, 80, ${glow.toFixed(2)})`
+    : `rgba(244, 197, 66, ${glow.toFixed(2)})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawPreviewCharacter(canvasId, style) {
   const canvas = document.getElementById(canvasId);
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#1f2129';
@@ -168,16 +244,22 @@ function drawPreview(canvasId, style) {
   renderCharacterAt(ctx, style, 'idle', 0, 2, 2, SCALE_PREVIEW);
 }
 
+function drawPreviewBackground(canvasId, backgroundId) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  renderBackgroundInto(ctx, canvas.width, canvas.height, backgroundId);
+}
+
 async function loadAvatarConfig() {
   const res = await fetch('/avatar-config');
   return res.json();
 }
 
-async function saveAvatarStyle(style) {
+async function saveAvatarConfig(partial) {
   await fetch('/avatar-config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ style }),
+    body: JSON.stringify(partial),
   });
 }
 
@@ -210,8 +292,9 @@ function startRenderLoop() {
         frame += 1;
         lastFrameTime = t;
       }
-      pulseBackground(stageCtx, stage, currentState, t);
-      renderCharacterAt(stageCtx, currentStyle, currentState, frame, 18, 8, SCALE_STAGE);
+      renderBackgroundInto(stageCtx, stage.width, stage.height, currentBackground);
+      drawStatePulseOverlay(stageCtx, stage, currentState, t);
+      renderCharacterAt(stageCtx, currentStyle, currentState, frame, CHAR_X, CHAR_Y, SCALE_STAGE);
     }
     requestAnimationFrame(tick);
   }
@@ -222,8 +305,10 @@ let renderLoopStarted = false;
 
 function showStage() {
   pickerEl.hidden = true;
+  bgPickerEl.hidden = true;
   stage.hidden = false;
   styleBtn.hidden = false;
+  bgBtn.hidden = false;
   connectSocket();
   if (!renderLoopStarted) {
     renderLoopStarted = true;
@@ -232,32 +317,53 @@ function showStage() {
   updateLabel();
 }
 
-function openPicker() {
+function openStylePicker() {
   stage.hidden = true;
   styleBtn.hidden = true;
+  bgBtn.hidden = true;
   pickerEl.hidden = false;
-  drawPreview('preview-a', 'a');
-  drawPreview('preview-b', 'b');
+  drawPreviewCharacter('preview-a', 'a');
+  drawPreviewCharacter('preview-b', 'b');
+}
+
+function openBackgroundPicker() {
+  stage.hidden = true;
+  styleBtn.hidden = true;
+  bgBtn.hidden = true;
+  bgPickerEl.hidden = false;
+  drawPreviewBackground('preview-bg-none', 'none');
+  drawPreviewBackground('preview-bg-developer', 'developer');
 }
 
 pickerEl.querySelectorAll('.choice').forEach((el) => {
   el.addEventListener('click', async () => {
     const style = el.dataset.style;
-    await saveAvatarStyle(style);
+    await saveAvatarConfig({ style });
     currentStyle = style;
     showStage();
   });
 });
 
-styleBtn.addEventListener('click', openPicker);
+bgPickerEl.querySelectorAll('.choice').forEach((el) => {
+  el.addEventListener('click', async () => {
+    const background = el.dataset.background;
+    await saveAvatarConfig({ background });
+    currentBackground = background;
+    showStage();
+  });
+});
+
+styleBtn.addEventListener('click', openStylePicker);
+bgBtn.addEventListener('click', openBackgroundPicker);
 
 async function init() {
   const config = await loadAvatarConfig();
+  currentBackground = config.background || 'none';
   if (config.style === 'a' || config.style === 'b') {
     currentStyle = config.style;
     showStage();
   } else {
-    openPicker();
+    openStylePicker();
   }
 }
 
