@@ -36,8 +36,12 @@ function readSkillFile(skillDir, skillName) {
   if (frontmatter === null) {
     console.warn(`Skill "${skillName}": malformed YAML frontmatter in ${skillPath} — listing by folder name, no description.`);
   }
+  // Keyed by the actual folder name, not frontmatter.name -- some skills
+  // (e.g. an orchestrator living in a folder with spaces) declare a
+  // frontmatter name that doesn't match their folder, and the folder name
+  // is what's actually reachable on disk for a later getSkill() lookup.
   return {
-    name: (frontmatter && frontmatter.name) || skillName,
+    name: skillName,
     description: (frontmatter && frontmatter.description) || null,
     body: body.trim(),
   };

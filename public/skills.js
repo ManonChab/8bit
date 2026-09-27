@@ -9,6 +9,16 @@ const skillsDetailEl = document.getElementById('skills-detail');
 
 let skillsLoaded = false;
 
+// Skill descriptions are written for an LLM to decide when to trigger the
+// skill, so they run long. The list only needs a short human-readable
+// hint -- take the first sentence, hard-capped, never the whole thing.
+function shortDescription(description, maxLen = 90) {
+  if (!description) return 'No description';
+  const firstSentence = description.split(/(?<=[.!?])\s/)[0];
+  const base = firstSentence.length <= maxLen ? firstSentence : description;
+  return base.length > maxLen ? `${base.slice(0, maxLen - 1).trimEnd()}…` : base;
+}
+
 function escapeHtml(str) {
   return str.replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -37,7 +47,7 @@ function renderSkillList(skills) {
       item.dataset.name = skill.name;
       item.innerHTML = `
         <div class="skill-name">${escapeHtml(skill.name)}<span class="skill-scope">${escapeHtml(skill.scope)}</span></div>
-        <div class="skill-desc">${escapeHtml(skill.description || 'No description')}</div>
+        <div class="skill-desc">${escapeHtml(shortDescription(skill.description))}</div>
       `;
       item.addEventListener('click', () => selectSkill(skill.name, item));
       skillsListEl.appendChild(item);
