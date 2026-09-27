@@ -1,4 +1,4 @@
-# 8bit — Claude Code Session Avatar
+# ClaudeCam
 
 A local companion app that shows a 16-bit-style pixel-art avatar reacting live to what your Claude Code CLI session is doing (idle / active / error), plus a read-only browser for your installed skills.
 

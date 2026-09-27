@@ -12,7 +12,6 @@
 const OFFSCREEN_W = 32;
 const OFFSCREEN_H = 42;
 const SCALE_STAGE = 4;
-const SCALE_PREVIEW = 3;
 const CHAR_X = 14;
 const CHAR_Y = 8;
 
@@ -20,8 +19,7 @@ const BG_GRID_W = 55;
 const BG_GRID_H = 48;
 
 const STYLES = {
-  a: { hair: '#f4a53a', clothes: '#3a6df4', skin: '#f2c9a0' },
-  b: { hair: '#3a54f4', clothes: '#c23a6d', skin: '#f2c9a0' },
+  developer: { hair: '#a97c50', clothes: '#5a7dd6', skin: '#f2c9a0' },
 };
 
 const IDLE_BOB = [0, -1, 0, 1]; // subtle idle "breathing" loop
@@ -173,7 +171,7 @@ function drawSeatedCharacter(offCtx, { palette, state, frame, eyeColor, t }) {
 }
 
 function drawCharacter(offCtx, { style, state, frame, background, t }) {
-  const palette = STYLES[style] || STYLES.a;
+  const palette = STYLES[style] || STYLES.developer;
   const eyeColor = state === 'error' ? '#e05050' : '#20202a';
 
   offCtx.clearRect(0, 0, OFFSCREEN_W, OFFSCREEN_H);
@@ -303,11 +301,12 @@ function renderRealCharacterAt(targetCtx, state, t, x, y, w, h, style, frame) {
 // ---- App wiring ------------------------------------------------------
 
 const pickerEl = document.getElementById('picker');
-const bgPickerEl = document.getElementById('bg-picker');
+const pickerReturnBtn = document.getElementById('picker-return-btn');
+const stageWrap = document.getElementById('stage-wrap');
 const stage = document.getElementById('stage');
 const styleBtn = document.getElementById('style-btn');
-const bgBtn = document.getElementById('bg-btn');
 const skillsBtn = document.getElementById('skills-btn');
+const skillsIconCanvas = document.getElementById('skills-icon');
 const labelEl = document.getElementById('label');
 const stageCtx = stage.getContext('2d');
 
@@ -322,7 +321,7 @@ bgOffscreen.height = BG_GRID_H;
 const bgOffCtx = bgOffscreen.getContext('2d');
 
 let currentStyle = null;
-let currentBackground = 'none';
+let currentBackground = 'developer';
 let currentState = 'idle';
 let currentSessionId = null;
 let socketConnected = false;
@@ -355,22 +354,15 @@ function drawStatePulseOverlay(ctx, canvas, state, t) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-function drawPreviewCharacter(canvasId, style) {
-  const canvas = document.getElementById(canvasId);
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#1f2129';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  renderCharacterAt(ctx, style, 'idle', 0, 2, 2, SCALE_PREVIEW);
-}
-
-function drawPreviewBackground(canvasId, backgroundId) {
-  const canvas = document.getElementById(canvasId);
-  const ctx = canvas.getContext('2d');
-  if (REAL_ART_THEMES.has(backgroundId)) {
-    renderRealBackgroundInto(ctx, canvas.width, canvas.height);
-  } else {
-    renderBackgroundInto(ctx, canvas.width, canvas.height, backgroundId);
-  }
+// Small static "book" icon for the skills button, drawn once with the same
+// 3-band shading helpers as the character/background so it reads as part of
+// the same 16-bit art style rather than a plain UI glyph.
+function drawSkillsIcon() {
+  const ctx = skillsIconCanvas.getContext('2d');
+  ctx.clearRect(0, 0, 16, 16);
+  drawShadedRoundRect(ctx, 2, 2, 12, 12, 1.5, '#e0c56f');
+  ctx.fillStyle = shade('#e0c56f', -70);
+  ctx.fillRect(7.5, 3, 1, 10); // spine
 }
 
 async function loadAvatarConfig() {
@@ -447,10 +439,8 @@ let renderLoopStarted = false;
 
 function showStage() {
   pickerEl.hidden = true;
-  bgPickerEl.hidden = true;
-  stage.hidden = false;
+  stageWrap.hidden = false;
   styleBtn.hidden = false;
-  bgBtn.hidden = false;
   skillsBtn.hidden = false;
   connectSocket();
   if (!renderLoopStarted) {
@@ -463,25 +453,14 @@ function showStage() {
 const skillsPanelEl = document.getElementById('skills-panel');
 
 function openStylePicker() {
-  stage.hidden = true;
+  stageWrap.hidden = true;
   styleBtn.hidden = true;
-  bgBtn.hidden = true;
   skillsBtn.hidden = true;
   skillsPanelEl.hidden = true;
   pickerEl.hidden = false;
-  drawPreviewCharacter('preview-a', 'a');
-  drawPreviewCharacter('preview-b', 'b');
-}
-
-function openBackgroundPicker() {
-  stage.hidden = true;
-  styleBtn.hidden = true;
-  bgBtn.hidden = true;
-  skillsBtn.hidden = true;
-  skillsPanelEl.hidden = true;
-  bgPickerEl.hidden = false;
-  drawPreviewBackground('preview-bg-none', 'none');
-  drawPreviewBackground('preview-bg-developer', 'developer');
+  // Only offer a way back to the stage once a style has actually been
+  // picked before -- on first run there's nothing to return to yet.
+  pickerReturnBtn.hidden = !currentStyle;
 }
 
 pickerEl.querySelectorAll('.choice').forEach((el) => {
@@ -493,22 +472,16 @@ pickerEl.querySelectorAll('.choice').forEach((el) => {
   });
 });
 
-bgPickerEl.querySelectorAll('.choice').forEach((el) => {
-  el.addEventListener('click', async () => {
-    const background = el.dataset.background;
-    await saveAvatarConfig({ background });
-    currentBackground = background;
-    showStage();
-  });
-});
+pickerReturnBtn.addEventListener('click', showStage);
 
 styleBtn.addEventListener('click', openStylePicker);
-bgBtn.addEventListener('click', openBackgroundPicker);
+
+drawSkillsIcon();
 
 async function init() {
   const config = await loadAvatarConfig();
-  currentBackground = config.background || 'none';
-  if (config.style === 'a' || config.style === 'b') {
+  currentBackground = config.background || 'developer';
+  if (config.style === 'developer') {
     currentStyle = config.style;
     showStage();
   } else {

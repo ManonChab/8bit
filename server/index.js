@@ -43,8 +43,8 @@ app.post('/avatar-config', (req, res) => {
   const next = { ...readAvatarConfig() };
 
   if (style !== undefined) {
-    if (style !== 'a' && style !== 'b') {
-      return res.status(400).json({ error: 'style must be "a" or "b"' });
+    if (style !== 'developer') {
+      return res.status(400).json({ error: 'style must be "developer"' });
     }
     next.style = style;
   }
@@ -100,7 +100,7 @@ wss.on('error', handleServerError);
 
 server.listen(PORT, () => {
   const url = `http://localhost:${PORT}`;
-  console.log(`8bit session avatar running at ${url}`);
+  console.log(`ClaudeCam running at ${url}`);
   openBrowser(url);
 });
 
