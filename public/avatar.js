@@ -93,20 +93,15 @@ function drawShadedCircle(ctx, cx, cy, radius, color) {
 // contextual action later (#13).
 const SEATED_THEMES = new Set(['developer']);
 
-// 3/4 back view, facing right: we see mostly the back/crown of the head:
-// hair covers the top, right side and back, leaving only a thin sliver of
-// cheek (with one eye, glancing back over the far shoulder) exposed on the
-// left — the side opposite the direction they're facing.
 function drawHeadAndTorso(offCtx, palette, eyeColor) {
   drawShadedRoundRect(offCtx, 9.5, 17, 13, 13, 3, palette.clothes);
   drawShadedCircle(offCtx, 16, 10, 7, palette.skin);
-  // Hair mass: bigger than the head and offset right/up, so it covers the
-  // crown, back and right side while a sliver stays exposed on the left.
-  drawShadedCircle(offCtx, 17.5, 9, 8, palette.hair);
-  // Hair trailing down the back (the side away from the exposed cheek).
-  drawShadedRoundRect(offCtx, 18, 14, 6, 6, 2, palette.hair);
+  drawShadedRoundRect(offCtx, 8, 2.5, 16, 8.5, 4, palette.hair);
+  drawShadedRoundRect(offCtx, 7.5, 6, 3, 7, 1.5, palette.hair);
+  drawShadedRoundRect(offCtx, 21.5, 6, 3, 7, 1.5, palette.hair);
   offCtx.fillStyle = eyeColor;
-  offCtx.fillRect(10, 11, 1.6, 1.6);
+  offCtx.fillRect(12.5, 10, 2, 2);
+  offCtx.fillRect(17.5, 10, 2, 2);
 }
 
 function drawStandingCharacter(offCtx, { palette, state, frame, eyeColor }) {
