@@ -135,4 +135,4 @@ A few decisions worth calling out:
 <a id="author"></a>
 ## 👤 Author
 
-[Manon Chab](https://github.com/ManonChab) — design, code, art direction, and this README, solo end to end.
+[Manon Chab](https://github.com/ManonChab) — design, code, art direction, and this README.
