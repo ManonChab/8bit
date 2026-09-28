@@ -5,6 +5,7 @@
   "description": "Local pixel-art avatar that reacts live to a Claude Code CLI session",
   "scripts": {
     "start": "node server/index.js",
+    "start:floating": "node server/index.js --floating",
     "setup": "node scripts/setup.js",
     "teardown": "node scripts/teardown.js",
     "test": "node --test"

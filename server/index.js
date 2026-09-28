@@ -1,12 +1,12 @@
 const path = require('path');
 const http = require('http');
-const { exec } = require('child_process');
 const express = require('express');
 const { WebSocketServer } = require('ws');
 const { PORT } = require('./config');
 const { mapEventToState } = require('./eventMapper');
 const { readAvatarConfig, writeAvatarConfig } = require('./avatar-config');
 const { listSkills, getSkill } = require('./skills');
+const { launchDefaultBrowser, launchFloatingWindow } = require('./browserLauncher');
 
 const app = express();
 app.use(express.json());
@@ -101,16 +101,28 @@ function handleServerError(err) {
 server.on('error', handleServerError);
 wss.on('error', handleServerError);
 
+// --floating opens the companion as a chromeless app window you can park
+// anywhere on screen, instead of a normal browser tab. The choice is
+// remembered in avatar-config.json so a plain `npm start` repeats it next
+// time; pass --browser to switch back.
+function resolveWindowMode() {
+  const args = process.argv.slice(2);
+  const explicit = args.includes('--floating') ? 'floating' : args.includes('--browser') ? 'browser' : null;
+  const stored = readAvatarConfig();
+  if (explicit && explicit !== stored.windowMode) {
+    writeAvatarConfig({ ...stored, windowMode: explicit });
+  }
+  return explicit || stored.windowMode || 'browser';
+}
+
 server.listen(PORT, () => {
   const url = `http://localhost:${PORT}`;
   console.log(`Live Session running at ${url}`);
-  openBrowser(url);
+  const windowMode = resolveWindowMode();
+  if (windowMode === 'floating') {
+    console.log('Opening as a floating window. Drag it wherever you like; run with --browser to switch back to a normal tab.');
+    launchFloatingWindow(url);
+  } else {
+    launchDefaultBrowser(url);
+  }
 });
-
-function openBrowser(url) {
-  const cmd =
-    process.platform === 'win32' ? `start "" "${url}"` :
-    process.platform === 'darwin' ? `open "${url}"` :
-    `xdg-open "${url}"`;
-  exec(cmd, () => {}); // best-effort; failing to auto-open is not fatal
-}
