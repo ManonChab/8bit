@@ -20,6 +20,9 @@ const BG_GRID_H = 48;
 
 const STYLES = {
   developer: { hair: '#a97c50', clothes: '#5a7dd6', skin: '#f2c9a0' },
+  // Placeholder palette for the procedural fallback -- chef has no real art
+  // yet (see art/chef-theme/), its picker card stays disabled until it does.
+  chef: { hair: '#3a2a1e', clothes: '#e8e8e8', skin: '#f2c9a0' },
 };
 
 const IDLE_BOB = [0, -1, 0, 1]; // subtle idle "breathing" loop
@@ -235,16 +238,27 @@ const BACKGROUND_THEMES = {
   developer: drawDeveloperScene,
 };
 
-// ---- Real PixelLab art (developer theme, animate-with-text-v3) --------
-// Generated stills + animations live under art/developer-theme/pixellab/v2/
-// (see that folder's NOTES.md for how). Only the "developer" theme has real
-// art so far (#8-#12 are still procedural) -- REAL_ART_THEMES is the single
-// switch a future theme flips once its own art pass lands.
-const REAL_ART_BASE = '/art/developer-theme/pixellab/v2';
-const REAL_ART_THEMES = new Set(['developer']);
+// ---- Real PixelLab art (developer + chef themes) -----------------------
+// Generated stills + animations live under art/<theme>-theme/pixellab/
+// (see each theme's NOTES.md for how). REAL_ART_THEMES is the switch a
+// theme's entry gets added to once its art pass is generated AND verified
+// (see retro/2026-09-27-pixellab-visual-art.md guideline #6).
+const REAL_ART_BASE_BY_THEME = {
+  developer: '/art/developer-theme/pixellab/v2',
+  chef: '/art/chef-theme/pixellab',
+};
+const REAL_ART_THEMES = new Set(['developer', 'chef']);
 const REAL_BG_NATIVE_W = 128;
 const REAL_BG_NATIVE_H = 112;
 const REAL_CHAR_NATIVE = 64;
+// Per-theme character placement, in native (128x112) background pixels --
+// developer is full-body, bottom-right anchored (its own desk fills the
+// frame); chef is waist-up and centered behind his counter (verified
+// against the real generated background before picking these numbers).
+const CHAR_POSITION_NATIVE = {
+  developer: { x: 56, y: 48 },
+  chef: { x: 32, y: 30 },
+};
 const REAL_ANIM_STATE_NAME = { idle: 'idle', active: 'working', error: 'error' };
 const REAL_ANIM_LAST_FRAME = { idle: 4, working: 8, error: 8 };
 const REAL_ANIM_FRAME_MS = 140; // ~7fps, matches public/test-assets.html
@@ -336,53 +350,126 @@ function renderWindowDayNightCycle(targetCtx, stageW, stageH, t) {
   targetCtx.stroke();
 }
 
+// Stove-top area, in native (128x112) background pixels -- measured off
+// the generated background the same way as developer's window rect. The
+// fire is drawn *before* the character (see tick()), so wherever it
+// overlaps the character's opaque pixels it's hidden behind him -- that's
+// fine/realistic for the base of the flame, but the rect reaches well
+// above the character's top (his sprite starts at CHAR_POSITION_NATIVE.chef.y,
+// currently 30) so the flame tips are always clearly visible rising above
+// his head, not fully hidden behind him.
+const STOVE_FIRE_RECT_NATIVE = { x: 56, y: 6, w: 28, h: 76 };
+const FIRE_COLORS = ['#e05a2b', '#f4b942', '#f9e07f'];
+
+// While the chef is in "error," a flickering fire rises from the stove
+// behind him -- procedural (retro guideline #7: this doesn't need
+// generated-art quality to read as fire), clipped to the stove rect so
+// nothing else in the kitchen moves.
+function renderStoveFire(targetCtx, stageW, stageH, t) {
+  const scaleX = stageW / REAL_BG_NATIVE_W;
+  const scaleY = stageH / REAL_BG_NATIVE_H;
+  const fx = STOVE_FIRE_RECT_NATIVE.x * scaleX;
+  const fy = STOVE_FIRE_RECT_NATIVE.y * scaleY;
+  const fw = STOVE_FIRE_RECT_NATIVE.w * scaleX;
+  const fh = STOVE_FIRE_RECT_NATIVE.h * scaleY;
+
+  targetCtx.save();
+  targetCtx.beginPath();
+  targetCtx.rect(fx, fy, fw, fh);
+  targetCtx.clip();
+
+  // 9 overlapping flame blobs (3x the original 3), each with its own
+  // staggered flicker phase, rising from the bottom of the rect and
+  // narrowing toward the top. Minimum height (flicker=0) already clears
+  // the character's head; peak flicker reaches the top of the rect.
+  const FLAME_COUNT = 9;
+  Array.from({ length: FLAME_COUNT }, (_, i) => i).forEach((i) => {
+    const phase = t / 90 + i * 1.4;
+    const flicker = Math.sin(phase) * 0.5 + 0.5;
+    const frac = (i + 0.5) / FLAME_COUNT;
+    const bx = fx + fw * frac + Math.sin(phase * 1.3) * fw * 0.04;
+    const baseY = fy + fh;
+    const flameH = fh * (0.7 + flicker * 0.4);
+    const flameW = fw * (0.17 - (i % 3) * 0.015);
+    targetCtx.fillStyle = FIRE_COLORS[i % FIRE_COLORS.length];
+    targetCtx.beginPath();
+    targetCtx.moveTo(bx - flameW / 2, baseY);
+    targetCtx.quadraticCurveTo(bx - flameW / 2, baseY - flameH * 0.6, bx, baseY - flameH);
+    targetCtx.quadraticCurveTo(bx + flameW / 2, baseY - flameH * 0.6, bx + flameW / 2, baseY);
+    targetCtx.closePath();
+    targetCtx.fill();
+  });
+
+  targetCtx.restore();
+}
+
 function loadImage(src) {
   const img = new Image();
   img.src = src;
   return img;
 }
 
-const realArt = {
-  background: loadImage(`${REAL_ART_BASE}/background/background.png`),
-  frames: Object.fromEntries(
-    Object.entries(REAL_ANIM_LAST_FRAME).map(([animState, lastFrame]) => [
-      animState,
-      Array.from({ length: lastFrame + 1 }, (_, i) =>
-        loadImage(`${REAL_ART_BASE}/animations/${animState}/frame-${i}.png`)
-      ),
-    ])
-  ),
-};
+function buildRealArt(base) {
+  return {
+    background: loadImage(`${base}/background/background.png`),
+    // Per-state static image -- used when a theme has stills but no
+    // animation yet (e.g. chef). Animation frames are preferred over this
+    // when both exist (see renderRealCharacterAt).
+    stills: Object.fromEntries(
+      Object.keys(REAL_ANIM_LAST_FRAME).map((animState) => [
+        animState,
+        loadImage(`${base}/character/${animState}.png`),
+      ])
+    ),
+    frames: Object.fromEntries(
+      Object.entries(REAL_ANIM_LAST_FRAME).map(([animState, lastFrame]) => [
+        animState,
+        Array.from({ length: lastFrame + 1 }, (_, i) =>
+          loadImage(`${base}/animations/${animState}/frame-${i}.png`)
+        ),
+      ])
+    ),
+  };
+}
+
+const realArtByTheme = Object.fromEntries(
+  Object.entries(REAL_ART_BASE_BY_THEME).map(([theme, base]) => [theme, buildRealArt(base)])
+);
 
 function imageReady(img) {
   return img.complete && img.naturalWidth > 0;
 }
 
-// Draws the real background if loaded, otherwise the procedural developer
-// scene as a placeholder for the brief window before images decode.
-function renderRealBackgroundInto(targetCtx, w, h) {
-  if (imageReady(realArt.background)) {
+// Draws theme's real background if loaded, otherwise the generic
+// procedural scene as a placeholder (brief window before images decode,
+// or indefinitely for a theme whose art doesn't exist yet).
+function renderRealBackgroundInto(targetCtx, w, h, theme) {
+  const bg = realArtByTheme[theme]?.background;
+  if (bg && imageReady(bg)) {
     targetCtx.imageSmoothingEnabled = false;
-    targetCtx.drawImage(realArt.background, 0, 0, w, h);
+    targetCtx.drawImage(bg, 0, 0, w, h);
   } else {
-    drawDeveloperScene(bgOffCtx);
-    targetCtx.imageSmoothingEnabled = false;
-    targetCtx.drawImage(bgOffscreen, 0, 0, w, h);
+    renderBackgroundInto(targetCtx, w, h, theme);
   }
 }
 
-// Draws the current animation frame for `state` if loaded, otherwise falls
-// back to the procedural seated character.
-function renderRealCharacterAt(targetCtx, state, t, x, y, w, h, style, frame) {
+// Prefers an animation frame for `state` if that theme has one loaded,
+// falls back to a static still if the theme has one (e.g. chef, stills
+// only), falls back further to the procedural character for this theme.
+function renderRealCharacterAt(targetCtx, state, t, x, y, w, h, style, frame, theme) {
   const animState = REAL_ANIM_STATE_NAME[state] || 'idle';
-  const frames = realArt.frames[animState];
-  const frameIndex = Math.floor(t / REAL_ANIM_FRAME_MS) % frames.length;
-  const img = frames[frameIndex];
-  if (imageReady(img)) {
+  const art = realArtByTheme[theme];
+  const frames = art?.frames[animState];
+  const animImg = frames && frames[Math.floor(t / REAL_ANIM_FRAME_MS) % frames.length];
+  const stillImg = art?.stills[animState];
+
+  const img = animImg && imageReady(animImg) ? animImg : stillImg && imageReady(stillImg) ? stillImg : null;
+
+  if (img) {
     targetCtx.imageSmoothingEnabled = false;
     targetCtx.drawImage(img, x, y, w, h);
   } else {
-    renderCharacterAt(targetCtx, style, state, frame, CHAR_X, CHAR_Y, SCALE_STAGE, 'developer', t);
+    renderCharacterAt(targetCtx, style, state, frame, CHAR_X, CHAR_Y, SCALE_STAGE, theme, t);
   }
 }
 
@@ -499,25 +586,32 @@ function startRenderLoop() {
         lastFrameTime = t;
       }
       if (REAL_ART_THEMES.has(currentBackground)) {
-        renderRealBackgroundInto(stageCtx, stage.width, stage.height);
-        if (currentState === 'active') {
+        renderRealBackgroundInto(stageCtx, stage.width, stage.height, currentBackground);
+        // A per-theme tailored effect (drawn behind the character, since
+        // both are "part of the scene the character stands in front of")
+        // replaces the generic pulse for that specific theme+state combo;
+        // every other combo keeps the generic pulse.
+        if (currentState === 'active' && currentBackground === 'developer') {
           renderWindowDayNightCycle(stageCtx, stage.width, stage.height, t);
+        } else if (currentState === 'error' && currentBackground === 'chef') {
+          renderStoveFire(stageCtx, stage.width, stage.height, t);
         } else {
           drawStatePulseOverlay(stageCtx, stage, currentState, t);
         }
         const scale = stage.width / REAL_BG_NATIVE_W;
         const charSize = REAL_CHAR_NATIVE * scale;
-        const marginRight = (48 / 768) * stage.width; // matches public/test-assets.html's right margin ratio
+        const charPos = CHAR_POSITION_NATIVE[currentBackground] || { x: 0, y: 0 };
         renderRealCharacterAt(
           stageCtx,
           currentState,
           t,
-          stage.width - marginRight - charSize,
-          stage.height - charSize,
+          charPos.x * scale,
+          charPos.y * scale,
           charSize,
           charSize,
           currentStyle,
-          frame
+          frame,
+          currentBackground
         );
       } else {
         renderBackgroundInto(stageCtx, stage.width, stage.height, currentBackground);
@@ -561,11 +655,15 @@ function openStylePicker() {
   pickerReturnBtn.hidden = !currentStyle;
 }
 
-pickerEl.querySelectorAll('.choice').forEach((el) => {
+pickerEl.querySelectorAll('.choice[data-style]').forEach((el) => {
   el.addEventListener('click', async () => {
     const style = el.dataset.style;
-    await saveAvatarConfig({ style });
+    // style maps 1:1 to a background theme -- the portrait picker chooses
+    // both together (see server/index.js). Picking a card must update
+    // both, or the stage keeps rendering whatever theme was picked last.
+    await saveAvatarConfig({ style, background: style });
     currentStyle = style;
+    currentBackground = style;
     showStage();
   });
 });

@@ -7,7 +7,7 @@ function readAvatarConfig() {
   try {
     return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   } catch {
-    return { style: null, background: null };
+    return { style: null, background: null, windowMode: null };
   }
 }
 
